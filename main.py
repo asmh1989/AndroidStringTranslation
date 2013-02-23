@@ -2,15 +2,24 @@
 # This Python file uses the following encoding: utf-8
 
 from xml.etree import ElementTree
+from xlwt import Workbook
 import os
 import sys
+reload(sys) 
+sys.setdefaultencoding('utf-8') 
 import subprocess
 import time
 
 current_path=os.getcwd()
 searchPath=["/frameworks/base/core"]#, "/frameworks/base/packages", "/packages/apps/", "/packages/providers", "/packages/wallpapers"]
-sample_path="/home/sun/svn/x3002m"
+sample_path="/home/sun/svn/R10_base_05"
 translate="es"
+sheetName=["f$b$c$"]#, "f$b$p$", "p$a$", "p$p$", "p$w$"]
+
+xlsStrings=Workbook()
+xlsArrays=Workbook()
+  
+print "__end" 
 
 def run_process(sub):
     while 1:
@@ -126,22 +135,56 @@ def _compareStringXML(xml1, xml2):
         print >> out, "strings's len = %d, translateStrings's len = %d"%(len(strings), len(translateStrings))
         needTransStrings.append(strings)
 
+    return needTransStrings
 
-def _readXML(xml1, xml2):
+
+def _readXML(xml1, xml2, sheet):
     stringsXML=_readXMLStrings(xml1)
     translateStringsXML=_readXMLStrings(xml2)
     needTranslateStringXML=_compareStringXML(stringsXML, translateStringsXML)
+    sheet.write(0,1,"values")
+    sheet.write(0,2,"values-es")
+    l=1
+    for strings in needTranslateStringXML[0]:  #<strings>
+        if strings[1] == "":
+            sheet.write(l,0,strings[0])
+        else:
+            sheet.write(l,0,strings[0]+":"+strings[1])
+        sheet.write(l,1,strings[2])
+        l+=1
+    for arrays in needTranslateStringXML[1]:    #<strings-array>
+        sheet.write(l,0,"arrays:"+arrays[0])
+        l+=1
+        for item in arrays[1]:
+            sheet.write(l,1,item)
+            l+=1
+        sheet.write(l,0,"arrays:"+arrays[0])
+        l+=1
+    for plurals in needTranslateStringXML[2]:   #<plurals>
+        sheet.write(l,0,"plurals:"+plurals[0])
+        for item in plurals[1]:
+            sheet.write(l,1,item[0]+":"+item[1])
+            l+=1
+        sheet.write(l,0,"plurals:"+plurals[0])
+    
+        
 
-def _start(dirPath):
+    
+
+def _start(dirPath, whichSearch):
     search_path=sample_path+dirPath
     list=os.listdir(sample_path+dirPath)
     for path in list:
+        packageName=path
         path=search_path+"/"+path
         print "path = %s"%path
         if os.path.exists(path+"/res"):
             stringsXML=path+"/res/values/strings.xml"
             stringsTransXML=path+"/res/values-es/strings.xml"
-            _readXML(stringsXML, stringsTransXML)
+            sheet_Name=sheetName[whichSearch]+packageName
+            sheet=xlsStrings.add_sheet(sheet_Name)
+            _readXML(stringsXML, stringsTransXML, sheet)
+
 
 
 if __name__=='__main__':
@@ -152,10 +195,10 @@ if __name__=='__main__':
 #        exit(1)
 #    p=sys.argv[0]
 
-    for path in searchPath:
-        print "path = %s"%path
-        _start(path)
-        
+    for i in range(0,len(searchPath)):
+        print "path = %s"%searchPath[i]
+        _start(searchPath[i], i)
+    xlsStrings.save("strings.xml")   
     
 
 LANGUAGES=( "中文简体 [Chinese](values-zh-rCN)",
