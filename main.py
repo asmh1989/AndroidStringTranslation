@@ -9,17 +9,19 @@ reload(sys)
 sys.setdefaultencoding('utf-8') 
 import subprocess
 import time
+import re
 
 current_path=os.getcwd()
-searchPath=["/frameworks/base/core"]#, "/frameworks/base/packages", "/packages/apps/", "/packages/providers", "/packages/wallpapers"]
-sample_path="/home/sun/svn/R10_base_05"
+searchPath=["/frameworks/base/core", "/frameworks/base/packages", "/packages/apps/", "/packages/providers", "/packages/wallpapers"]
+#sample_path="/home/sun/svn/R10_base_05"  # for my ubuntu
+sample_path="/Volumes/linux/R10"       #for my Mac OS
 translate="es"
-sheetName=["f$b$c$"]#, "f$b$p$", "p$a$", "p$p$", "p$w$"]
+sheetName=["f$b$c$", "f$b$p$", "p$a$", "p$p$", "p$w$"]
+XMLlist=["/res/values/strings.xml", "/res/values/arrays.xml"]
 
 xlsStrings=Workbook()
 xlsArrays=Workbook()
-  
-print "__end" 
+
 
 def run_process(sub):
     while 1:
@@ -30,6 +32,12 @@ def run_process(sub):
             time.sleep(1)
         else:
             break;
+
+def _isAdd(text):
+        temp=str(text)
+        p=re.compile('[a-z]+', re.IGNORECASE)
+        m=p.search(temp)
+        return  m
 
 def _readXMLStrings(xml1):
     root=ElementTree.fromstring(open(xml1).read())
@@ -44,8 +52,12 @@ def _readXMLStrings(xml1):
             product=node.attrib['product']
         text=""
         text=node.text
-        node_string=[name, product, text]
-        L_String.append(node_string)
+        if not (text is None) and _isAdd(text):
+            print "name = %s, text=%s"%(name, str(text))
+            node_string=[name, product, text]
+            L_String.append(node_string)
+        else :
+            print "not add text = %s"%str(text)
 #    for l in L_String:
 #        print "string name=%s, product=%s, value=%s"%(l[0], l[1], l[2])
     string_array_node=root.iter("string-array")
@@ -61,7 +73,8 @@ def _readXMLStrings(xml1):
             for item in node.iter("item"):
                 text=""
                 text=item.text
-                L_Item.append(text)
+                if _isAdd(text):
+                    L_Item.append(text)
             node_string_array=[name, L_Item]
             L_String_array.append(node_string_array)
 #    for l in L_String_array:
@@ -79,8 +92,9 @@ def _readXMLStrings(xml1):
             quantity=item.attrib['quantity']
             text=""
             text=item.text
-            plurals=[quantity, text]
-            L_Item.append(plurals)
+            if _isAdd(text):
+                plurals=[quantity, text]
+                L_Item.append(plurals)
         plurals=[name, L_Item]
         L_Plurals.append(plurals)
 #    for l in L_Plurals:
@@ -98,11 +112,13 @@ def _isTheOne(i, a, b, strings, transStrings):
         
 
 def _compareStringXML(xml1, xml2):
-    out = open("temp.out", 'w')
+    #out = open("temp.out", 'w')
     needTransStrings=list()
     for t in range(0, len(xml1)):
-        strings=sorted(xml1[t], key=lambda x:x[0]) 
-        translateStrings=sorted(xml2[t], key=lambda x:x[0])
+        strings=sorted(xml1[t], key=lambda x:x[0])
+        translateStrings=list()
+        if len(xml2) > 0:
+            translateStrings=sorted(xml2[t], key=lambda x:x[0])
         willDel=list()
         a=0
         b=0
@@ -113,12 +129,13 @@ def _compareStringXML(xml1, xml2):
             if not b < len(translateStrings):
                 break;
             transName=translateStrings[b][0];
-            print "name = %s, transName = %s cmp = %d"%(name, transName, cmp(name, transName))
+#            print "name = %s, transName = %s cmp = %d"%(name, transName, cmp(name, transName))
             while cmp(name, transName) > 0:
-                transName=translateStrings[++b][0]
+                b+=1
+                transName=translateStrings[b][0]
             if cmp(name, transName) == 0:
                 if _isTheOne(t, a, b, strings, translateStrings):
-                    print "strings name=%s has been translated, a=%d, b=%d"%(name, a, b)
+         #           print "strings name=%s has been translated, a=%d, b=%d"%(name, a, b)
                     num=[a, b]
                     b+=1
                     willDel.append(num)
@@ -126,13 +143,13 @@ def _compareStringXML(xml1, xml2):
     
         while len(willDel) > 0:
             number=willDel.pop()
-            print "will del (%d, %d)"%(number[0], number[1])
+        #    print "will del (%d, %d)"%(number[0], number[1])
             del strings[number[0]]
             del translateStrings[number[1]]
-        print >> out, " --------------%d------------"%t
-        for i in strings:
-            print >> out, "strings name = %s, product=%s, values = %s"%(i[0], i[1], i[2])
-        print >> out, "strings's len = %d, translateStrings's len = %d"%(len(strings), len(translateStrings))
+#        print >> out, " --------------%d------------"%t
+#        for i in strings:
+#            print >> out, "strings name = %s, product=%s, values = %s"%(i[0], i[1], i[2])
+#        print >> out, "strings's len = %d, translateStrings's len = %d"%(len(strings), len(translateStrings))
         needTransStrings.append(strings)
 
     return needTransStrings
@@ -140,7 +157,9 @@ def _compareStringXML(xml1, xml2):
 
 def _readXML(xml1, xml2, sheet):
     stringsXML=_readXMLStrings(xml1)
-    translateStringsXML=_readXMLStrings(xml2)
+    translateStringsXML=list()
+    if os.path.exists(xml2):
+        translateStringsXML=_readXMLStrings(xml2)
     needTranslateStringXML=_compareStringXML(stringsXML, translateStringsXML)
     sheet.write(0,1,"values")
     sheet.write(0,2,"values-es")
@@ -156,16 +175,21 @@ def _readXML(xml1, xml2, sheet):
         sheet.write(l,0,"arrays:"+arrays[0])
         l+=1
         for item in arrays[1]:
+            sheet.write(l,0,"item")
             sheet.write(l,1,item)
             l+=1
         sheet.write(l,0,"arrays:"+arrays[0])
         l+=1
     for plurals in needTranslateStringXML[2]:   #<plurals>
+        print "i = %d, plurals[0] = %s"%(l, plurals[0])
         sheet.write(l,0,"plurals:"+plurals[0])
+        l+=1
         for item in plurals[1]:
-            sheet.write(l,1,item[0]+":"+item[1])
+            sheet.write(l,0,item[0])
+            sheet.write(l,1,item[1])
             l+=1
         sheet.write(l,0,"plurals:"+plurals[0])
+        l+=1
     
         
 
@@ -180,6 +204,8 @@ def _start(dirPath, whichSearch):
         print "path = %s"%path
         if os.path.exists(path+"/res"):
             stringsXML=path+"/res/values/strings.xml"
+            if len(packageName) > 24:
+                packageName=packageName[0:23]
             stringsTransXML=path+"/res/values-es/strings.xml"
             sheet_Name=sheetName[whichSearch]+packageName
             sheet=xlsStrings.add_sheet(sheet_Name)
@@ -198,7 +224,7 @@ if __name__=='__main__':
     for i in range(0,len(searchPath)):
         print "path = %s"%searchPath[i]
         _start(searchPath[i], i)
-    xlsStrings.save("strings.xml")   
+    xlsStrings.save("strings.xls")   
     
 
 LANGUAGES=( "中文简体 [Chinese](values-zh-rCN)",
@@ -260,4 +286,3 @@ LANGUAGES=( "中文简体 [Chinese](values-zh-rCN)",
             "韩语 [한국의](values-ko-rKR)",
             "加泰罗尼亚语 [Català](values-ca-rES)",
             "日语 [日本語](values-ja-rJP)")
-
