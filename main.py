@@ -12,15 +12,17 @@ import time
 import re
 
 current_path=os.getcwd()
-searchPath=["/frameworks/base/core", "/frameworks/base/packages", "/packages/apps/", "/packages/providers", "/packages/wallpapers"]
-#sample_path="/home/sun/svn/R10_base_05"  # for my ubuntu
-sample_path="/Volumes/linux/R10"       #for my Mac OS
+searchPath=["/frameworks/base/core", "/frameworks/base/packages", "/packages/apps", "/packages/providers", "/packages/wallpapers"]
+sample_path="/home/sun/svn/R10_05_KS"  # for my ubuntu
+#sample_path="/Volumes/linux/R10"       #for my Mac OS
 translate="es"
 sheetName=["f$b$c$", "f$b$p$", "p$a$", "p$p$", "p$w$"]
 XMLlist=["/res/values/strings.xml", "/res/values/arrays.xml"]
 
 xlsStrings=Workbook()
 xlsArrays=Workbook()
+
+xlsList=[xlsStrings, xlsArrays]
 
 
 def run_process(sub):
@@ -53,11 +55,21 @@ def _readXMLStrings(xml1):
         text=""
         text=node.text
         if not (text is None) and _isAdd(text):
-            print "name = %s, text=%s"%(name, str(text))
+            #print "name = %s, text=%s"%(name, str(text))
+            if text[0] == '\n':
+                #print "find name=%s, text=%s"%(name, text)
+                ll=str(text).split("\n")
+                newText=''
+                for l in ll:
+                    if not l.isspace():
+                        newText += l.strip()
+                    #print "line : %s"%l 
+                text=newText
+                #print "xiu find  name=%s, text=%s"%(name, text)
             node_string=[name, product, text]
             L_String.append(node_string)
-        else :
-            print "not add text = %s"%str(text)
+#        else :
+#            print "not add text = %s"%str(text)
 #    for l in L_String:
 #        print "string name=%s, product=%s, value=%s"%(l[0], l[1], l[2])
     string_array_node=root.iter("string-array")
@@ -122,7 +134,7 @@ def _compareStringXML(xml1, xml2):
         willDel=list()
         a=0
         b=0
-        print "strings's len = %d, translateStrings's len = %d"%(len(strings), len(translateStrings))
+        #print "strings's len = %d, translateStrings's len = %d"%(len(strings), len(translateStrings))
         
         for i in range(0,len(strings)):
             name=strings[a][0];
@@ -162,7 +174,7 @@ def _readXML(xml1, xml2, sheet):
         translateStringsXML=_readXMLStrings(xml2)
     needTranslateStringXML=_compareStringXML(stringsXML, translateStringsXML)
     sheet.write(0,1,"values")
-    sheet.write(0,2,"values-es")
+    sheet.write(0,2,"values-beng")
     l=1
     for strings in needTranslateStringXML[0]:  #<strings>
         if strings[1] == "":
@@ -181,7 +193,7 @@ def _readXML(xml1, xml2, sheet):
         sheet.write(l,0,"arrays:"+arrays[0])
         l+=1
     for plurals in needTranslateStringXML[2]:   #<plurals>
-        print "i = %d, plurals[0] = %s"%(l, plurals[0])
+        #print "i = %d, plurals[0] = %s"%(l, plurals[0])
         sheet.write(l,0,"plurals:"+plurals[0])
         l+=1
         for item in plurals[1]:
@@ -201,15 +213,25 @@ def _start(dirPath, whichSearch):
     for path in list:
         packageName=path
         path=search_path+"/"+path
-        print "path = %s"%path
+#        print "path = %s"%path
         if os.path.exists(path+"/res"):
             stringsXML=path+"/res/values/strings.xml"
             if len(packageName) > 24:
                 packageName=packageName[0:23]
-            stringsTransXML=path+"/res/values-es/strings.xml"
+            stringsTransXML=path+"/res/values-ben/strings.xml"
             sheet_Name=sheetName[whichSearch]+packageName
             sheet=xlsStrings.add_sheet(sheet_Name)
             _readXML(stringsXML, stringsTransXML, sheet)
+            stringsXML=path+"/res/values/arrays.xml"
+            if not os.path.exists(stringsXML):
+                continue
+            if len(packageName) > 24:
+                packageName=packageName[0:23]
+            stringsTransXML=path+"/res/values-ben/arrays.xml"
+            sheet_Name=sheetName[whichSearch]+packageName
+            sheet=xlsArrays.add_sheet(sheet_Name)
+            _readXML(stringsXML, stringsTransXML, sheet)
+
 
 
 
@@ -224,7 +246,8 @@ if __name__=='__main__':
     for i in range(0,len(searchPath)):
         print "path = %s"%searchPath[i]
         _start(searchPath[i], i)
-    xlsStrings.save("strings.xls")   
+    xlsStrings.save("strings.xls")
+    xlsArrays.save("arrays.xls")
     
 
 LANGUAGES=( "中文简体 [Chinese](values-zh-rCN)",
