@@ -13,9 +13,9 @@ import re
 
 current_path=os.getcwd()
 searchPath=["/frameworks/base/core", "/frameworks/base/packages", "/packages/apps", "/packages/providers", "/packages/wallpapers"]
-sample_path="/home/sun/svn/R10_05_KS"  # for my ubuntu
+sample_path="/home/sun/sshfs/data/sunminhua/svn/R20_0503_SC"  # for my ubuntu
 #sample_path="/Volumes/linux/R10"       #for my Mac OS
-translate="es"
+translate="values-in-rID"
 sheetName=["f$b$c$", "f$b$p$", "p$a$", "p$p$", "p$w$"]
 XMLlist=["/res/values/strings.xml", "/res/values/arrays.xml"]
 
@@ -167,14 +167,24 @@ def _compareStringXML(xml1, xml2):
     return needTransStrings
 
 
-def _readXML(xml1, xml2, sheet):
+def _readXML(xml1, xml2, sheetname, xls):
     stringsXML=_readXMLStrings(xml1)
     translateStringsXML=list()
     if os.path.exists(xml2):
         translateStringsXML=_readXMLStrings(xml2)
     needTranslateStringXML=_compareStringXML(stringsXML, translateStringsXML)
-    sheet.write(0,1,"values")
-    sheet.write(0,2,"values-beng")
+    sheet=""
+
+    if len(needTranslateStringXML[0]) + len(needTranslateStringXML[1]) + len(needTranslateStringXML[2]) < 1:
+        print "sheetName = %s is null"%sheetname
+        return
+    else:
+        #print needTranslateStringXML
+        print "sheetName = %s will add"%sheetname
+        sheet=xls.add_sheet(sheetname)
+        sheet.write(0,1,"values")
+        sheet.write(0,2,translate)
+        
     l=1
     for strings in needTranslateStringXML[0]:  #<strings>
         if strings[1] == "":
@@ -202,15 +212,20 @@ def _readXML(xml1, xml2, sheet):
             l+=1
         sheet.write(l,0,"plurals:"+plurals[0])
         l+=1
-    
-        
 
+def _verifyStr(str1, path, xml):
+    if not os.path.exists(path+"/res/"+str1+xml):
+        string = str1.split('-')
+        if len(string) > 2:
+            #print "str[0] = %s, str[1] = %s"%(string[0], string[1])
+            str1=path+"/res/"+string[0]+'-'+string[1]+xml
+    return str1
     
-
 def _start(dirPath, whichSearch):
     search_path=sample_path+dirPath
     list=os.listdir(sample_path+dirPath)
     for path in list:
+        #print "current Path = %s"%path
         packageName=path
         path=search_path+"/"+path
 #        print "path = %s"%path
@@ -218,22 +233,21 @@ def _start(dirPath, whichSearch):
             stringsXML=path+"/res/values/strings.xml"
             if len(packageName) > 24:
                 packageName=packageName[0:23]
-            stringsTransXML=path+"/res/values-ben/strings.xml"
+            stringsTransXML=_verifyStr(translate, path, "/strings.xml")
+            #print "find other stringsTransXML = %s"%stringsTransXML
             sheet_Name=sheetName[whichSearch]+packageName
-            sheet=xlsStrings.add_sheet(sheet_Name)
-            _readXML(stringsXML, stringsTransXML, sheet)
+            #sheet=xlsStrings.add_sheet(sheet_Name)
+            _readXML(stringsXML, stringsTransXML, sheet_Name, xlsStrings)
             stringsXML=path+"/res/values/arrays.xml"
             if not os.path.exists(stringsXML):
                 continue
             if len(packageName) > 24:
                 packageName=packageName[0:23]
-            stringsTransXML=path+"/res/values-ben/arrays.xml"
+            stringsTransXML=_verifyStr(translate, path, "/arrays.xml")
+
             sheet_Name=sheetName[whichSearch]+packageName
-            sheet=xlsArrays.add_sheet(sheet_Name)
-            _readXML(stringsXML, stringsTransXML, sheet)
-
-
-
+            #sheet=xlsArrays.add_sheet(sheet_Name)
+            _readXML(stringsXML, stringsTransXML, sheet_Name, xlsArrays)
 
 if __name__=='__main__':
     par_len=len(sys.argv)
@@ -241,7 +255,8 @@ if __name__=='__main__':
 #    if par_len<2:
 #        print "missing a valid parameters"
 #        exit(1)
-#    p=sys.argv[0]
+    if par_len > 1:
+        translate=sys.argv[1]
 
     for i in range(0,len(searchPath)):
         print "path = %s"%searchPath[i]
