@@ -2,18 +2,21 @@
 # This Python file uses the following encoding: utf-8
 
 from xml.etree import ElementTree
+from xml.dom.minidom import Document
 from xlwt import Workbook
+from xlrd import open_workbook
 import os
-import sys
-reload(sys) 
-sys.setdefaultencoding('utf-8') 
 import subprocess
 import time
 import re
+import sys
+reload(sys) 
+sys.setdefaultencoding('utf-8') 
 
 current_path=os.getcwd()
 searchPath=["/frameworks/base/core", "/frameworks/base/packages", "/packages/apps", "/packages/providers", "/packages/wallpapers"]
 sample_path="/home/sun/sshfs/data/sunminhua/svn/R20_0503_SC"  # for my ubuntu
+project_name='R20SC'
 #sample_path="/Volumes/linux/R10"       #for my Mac OS
 translate="values-in-rID"
 sheetName=["f$b$c$", "f$b$p$", "p$a$", "p$p$", "p$w$"]
@@ -212,6 +215,117 @@ def _readXML(xml1, xml2, sheetname, xls):
             l+=1
         sheet.write(l,0,"plurals:"+plurals[0])
         l+=1
+def mkNewdir(path):
+    if not os.path.exists(path):
+        os.mkdir(path) 
+
+def getNewFile(project, sheetName):
+    newfile=''
+    pwd = current_path+'/'+project
+    mkNewdir(pwd)
+    for path in sheetName.split('$'):
+        if path == 'f':
+            newfile += '/frameworks'
+        elif path == 'b':
+            newfile += '/base'
+        elif path == 'c':
+            newfile += '/core'
+        elif path == 'p':
+                newfile += '/packages'
+        elif path == 'a':
+            newfile += '/apps'
+        elif path == 'p':
+            newfile += '/providers'
+        elif path == 'w':
+            newfile += '/wallpapers'
+        else :
+            newfile += '/'+path
+        mkNewdir(pwd+newfile)
+    print "need mkdir file = %s"%newfile
+    newfile += '/res'
+    mkNewdir(pwd+newfile)
+    return newfile
+
+
+def _startParse(project, xlsname, whichxml):
+    wb=open_workbook(xlsname, encoding_override='cp1252')
+    for sheet in wb.sheets():
+        tlan = []
+        print "sheet name = %s, rows = %d, cols = %d"%(sheet.name, sheet.nrows, sheet.ncols)
+        for lan in range(2, sheet.ncols):
+            print "add trans lan = %s"%sheet.cell(0, lan).value
+            tlan.append(sheet.cell(0, lan).value)
+        newfile= current_path+'/'+project+getNewFile(project, sheet.name)
+        for lan in range(2, sheet.ncols):
+            curPath = newfile+'/'+sheet.cell(0, lan).value
+            mkNewdir(curPath)
+            xml = Document()
+            xmlstore = xml.createElement('resources')
+            xmlstore.setAttribute('xmlns:xliff', 'urn:oasis:names:tc:xliff:document:1.2')
+            xml.appendChild(xmlstore)
+            for row in range(1, sheet.nrows):
+                rowValue = sheet.cell(row, 0).value
+                print 'row = %s, rowValue = %s, len = %d'%(row, rowValue, len(rowValue))
+                whichValue=''    
+                if not rowValue.find('arrays'): 
+                    print "find arrays........."
+                    whichValue='array'
+                elif not rowValue.find('plurals'):
+                    whichValue='plurals'
+                else :
+                    whichValue='strings'
+                if whichValue != 'strings':
+                    if (row+1) == sheet.nrows:
+                        print '......last line'
+                        continue
+                    elif not sheet.cell(row+1,0).value.find(whichValue+'s:'):
+                        print '......close..close'
+                        continue
+                    else:
+                        atter=sheet.cell(row, 0).value.split(':')[1]
+                        #print 'find row = %s, value = %s'%(row, rowValue)
+                        cell = ''
+                        secName=''
+                        if whichValue == 'array':
+                            secName='string-array'
+                        elif whichValue == 'plurals':
+                            secName='plurals'
+                        cell = xml.createElement(secName)
+                        print '%s name=%s'%(secName,atter)
+                        cell.setAttribute('name', atter)
+                        xmlstore.appendChild(cell)
+                        while row < (sheet.nrows - 1):
+                            row = row+1
+                            if not sheet.cell(row, 0).value.find(whichValue+'s:'):
+                                break;
+                            name=sheet.cell(row, 0).value
+                            value=sheet.cell(row, lan).value
+                            if len(value) > 0:
+                                print 'cell %s, value = %s'%(name, value)
+                                cell2 = xml.createElement(name)
+                                cell2_value=xml.createTextNode(value)
+                                cell2.appendChild(cell2_value)
+                                cell.appendChild(cell2)
+                        row = row+1
+                else:
+                    StringName=sheet.cell(row,0).value
+                    StringValue=sheet.cell(row,lan).value
+                    if len(StringValue) > 0:
+                        cellStrings=xml.createElement('string')
+                        cellStrings.setAttribute('name', StringName)
+                        cellString_value=xml.createTextNode(StringValue)
+                        cellStrings.appendChild(cellString_value)
+                        xmlstore.appendChild(cellStrings)
+
+                #elif rowValue.find('plurals:'):
+                #    whichValue='plural'
+                #else :
+                #    whichValues='string'
+            f=open(curPath+'/'+whichxml+'.xml', 'w')
+            f.write(xml.toprettyxml(indent = '\t', newl='\n', encoding='utf-8'))
+            f.close()
+
+
 
 def _verifyStr(str1, path, xml):
     if not os.path.exists(path+"/res/"+str1+xml):
@@ -223,8 +337,8 @@ def _verifyStr(str1, path, xml):
     
 def _start(dirPath, whichSearch):
     search_path=sample_path+dirPath
-    list=os.listdir(sample_path+dirPath)
-    for path in list:
+    listpath=os.listdir(sample_path+dirPath)
+    for path in listpath:
         #print "current Path = %s"%path
         packageName=path
         path=search_path+"/"+path
@@ -232,7 +346,7 @@ def _start(dirPath, whichSearch):
         if os.path.exists(path+"/res"):
             stringsXML=path+"/res/values/strings.xml"
             if len(packageName) > 24:
-                packageName=packageName[0:23]
+                packageName=packageName[0:23]       
             stringsTransXML=_verifyStr(translate, path, "/strings.xml")
             #print "find other stringsTransXML = %s"%stringsTransXML
             sheet_Name=sheetName[whichSearch]+packageName
@@ -249,20 +363,40 @@ def _start(dirPath, whichSearch):
             #sheet=xlsArrays.add_sheet(sheet_Name)
             _readXML(stringsXML, stringsTransXML, sheet_Name, xlsArrays)
 
+
+
 if __name__=='__main__':
     par_len=len(sys.argv)
     print "pwd = %s"%current_path
 #    if par_len<2:
 #        print "missing a valid parameters"
 #        exit(1)
+    isExport = 0 
     if par_len > 1:
         translate=sys.argv[1]
-
-    for i in range(0,len(searchPath)):
-        print "path = %s"%searchPath[i]
-        _start(searchPath[i], i)
-    xlsStrings.save("strings.xls")
-    xlsArrays.save("arrays.xls")
+        for i in range(1, par_len):
+            if sys.argv[i] == '-r' :
+                isExport = 1
+    if isExport == 0 :
+        for i in range(0,len(searchPath)):
+            print "path = %s"%searchPath[i]
+            _start(searchPath[i], i)
+        xlsStrings.save(project_name +"_strings.xls")
+        xlsArrays.save(project_name+"_arrays.xls")
+    else :
+        print "start export from xls"
+        list = os.listdir(current_path)
+        for name in list:
+            if name.find(".xls") > 0:
+                project = name.split('_')[0]                  #need has only one '-' string
+                whichxml=''
+                if name.find('arrays'):
+                    whichxml = 'arrays'
+                elif name.find('strings'):
+                    whichxml = 'strings'
+                print "find xls : %s project=%s whichxml=%s"%(name, project, whichxml)
+                _startParse(project, current_path+"/"+name, whichxml)
+        
     
 
 LANGUAGES=( "中文简体 [Chinese](values-zh-rCN)",
